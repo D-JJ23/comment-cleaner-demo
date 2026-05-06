@@ -1,7 +1,4 @@
-from pathlib import Path
-out = Path('output')
-out.mkdir(exist_ok=True)
-app = r'''import re
+import re
 import streamlit as st
 import pandas as pd
 
@@ -80,6 +77,3 @@ if st.button('一键清理', type='primary'):
         st.warning('没有可处理的评论。')
 else:
     st.info('点击「一键清理」开始演示。')
-'''
-(out / 'app.py').write_text(app, encoding='utf-8')
-print('saved', (out / 'app.py').exists())
