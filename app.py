@@ -45,8 +45,7 @@ if 'neg_text' not in st.session_state:
 
 st.sidebar.header('规则设置')
 min_len = st.sidebar.slider('最短有效字数', 2, 20, 5)
-text_input = st.text_area('输入评论，支持每行一条', '
-'.join(sample_comments), height=220)
+text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
 
 st.sidebar.subheader('关键词筛选列表')
 st.session_state.white_text = st.sidebar.text_input('白名单关键词（逗号分隔）', value=st.session_state.white_text, key='white_input')
