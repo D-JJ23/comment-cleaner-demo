@@ -116,15 +116,7 @@ def run_cleaning():
             '人工审核': review_flag
         }
         rows.append(row)
-        records.append({
-            '序号': i,
-            '原始评论': line,
-            '显示记录': display_text,
-            '分类': label,
-            '建议操作': action,
-            '理由': reason,
-            '人工审核': review_flag
-        })
+        records.append(row.copy())
     st.session_state.cleaned_df = pd.DataFrame(rows)
     st.session_state.clean_records = records
     if not st.session_state.cleaned_df.empty:
@@ -287,7 +279,12 @@ elif st.session_state.page == '最终结果':
         c5.metric('已审核', int((df['人工审核'] == '已审核').sum()) if '人工审核' in df.columns else 0)
         st.checkbox('确认保存到清理记录', key='confirm_save')
         if st.session_state.confirm_save:
-            st.session_state.clean_records = df[['原始评论', '显示记录', '分类', '建议操作', '理由']].to_dict('records')
+            save_cols = ['原始评论', '显示记录', '分类', '建议操作', '理由']
+            save_df = df.copy()
+            for col in save_cols:
+                if col not in save_df.columns:
+                    save_df[col] = ''
+            st.session_state.clean_records = save_df[save_cols].fillna('').to_dict('records')
             st.success('已保存到清理记录区块。')
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.download_button('下载结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
@@ -299,12 +296,12 @@ else:
     if st.session_state.clean_records:
         st.write('以下为已保存的清理记录。格式：左侧原始文本 → 右侧处理结果。')
         for idx, rec in enumerate(st.session_state.clean_records):
-            st.markdown(f"{idx+1}. {rec['原始评论']} → {rec['显示记录']}")
+            st.markdown(f"{idx+1}. {rec.get('原始评论', '')} → {rec.get('显示记录', '')}")
         options = [f"记录 {i+1}" for i in range(len(st.session_state.clean_records))]
         selected = st.selectbox('查看保存的记录列表', options)
         if selected:
             i = options.index(selected)
             rec = st.session_state.clean_records[i]
-            st.code(f"{rec['原始评论']} → {rec['显示记录']}", language='text')
+            st.code(f"{rec.get('原始评论', '')} → {rec.get('显示记录', '')}", language='text')
     else:
         st.info('当前还没有保存的清理记录。去“最终结果”页勾选确认保存。')
