@@ -30,103 +30,25 @@ if 'spam_list' not in st.session_state:
 if 'neg_list' not in st.session_state:
     st.session_state.neg_list = ['笑死', '垃圾', '滚', '废物', '骗', '水']
 
+if 'pending_add_white' not in st.session_state:
+    st.session_state.pending_add_white = []
+if 'pending_add_spam' not in st.session_state:
+    st.session_state.pending_add_spam = []
+if 'pending_add_neg' not in st.session_state:
+    st.session_state.pending_add_neg = []
+if 'white_text' not in st.session_state:
+    st.session_state.white_text = ','.join(st.session_state.whitelist)
+if 'spam_text' not in st.session_state:
+    st.session_state.spam_text = ','.join(st.session_state.spam_list)
+if 'neg_text' not in st.session_state:
+    st.session_state.neg_text = ','.join(st.session_state.neg_list)
+
 st.sidebar.header('规则设置')
 min_len = st.sidebar.slider('最短有效字数', 2, 20, 5)
-text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
+text_input = st.text_area('输入评论，支持每行一条', '
+'.join(sample_comments), height=220)
 
 st.sidebar.subheader('关键词筛选列表')
-white_text = st.sidebar.text_input('白名单关键词（逗号分隔）', ','.join(st.session_state.whitelist))
-spam_text = st.sidebar.text_input('广告关键词（逗号分隔）', ','.join(st.session_state.spam_list))
-neg_text = st.sidebar.text_input('负能量关键词（逗号分隔）', ','.join(st.session_state.neg_list))
-
-white = [x.strip() for x in white_text.split(',') if x.strip()]
-spam = [x.strip() for x in spam_text.split(',') if x.strip()]
-neg = [x.strip() for x in neg_text.split(',') if x.strip()]
-
-def classify(comment: str):
-    t = comment.strip()
-    if not t:
-        return '空白', 'gray', '空行'
-    if any(k in t for k in white):
-        return '优质保留', 'green', '命中白名单'
-    if any(k in t for k in spam):
-        return '广告引流', 'red', '命中广告词'
-    if any(k in t for k in neg):
-        return '杠精/负能量', 'orange', '命中负面词'
-    if len(re.sub(r'\s+', '', t)) < min_len:
-        return '无意义灌水', 'gray', '过短'
-    if re.fullmatch(r'[哈嘿哦啊嗯嘛~!！?.。，,。]+', t):
-        return '无意义灌水', 'gray', '纯情绪/口水'
-    if re.search(r'\d{5,}', t):
-        return '广告引流', 'red', '疑似号码'
-    return '待人工', 'blue', '需人工复核'
-
-if st.button('一键清理', type='primary'):
-    rows = []
-    for i, line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
-        label, color, reason = classify(line)
-        action = '保留' if label == '优质保留' else '隐藏'
-        review_flag = '待人工审核' if label == '待人工' else '无需人工'
-        rows.append({
-            '序号': i,
-            '评论': line,
-            '分类': label,
-            '建议操作': action,
-            '理由': reason,
-            '人工审核': review_flag
-        })
-
-    if rows:
-        df = pd.DataFrame(rows)
-        st.session_state.review_items = df[df['人工审核'] == '待人工审核'][['序号', '评论']].to_dict('records')
-
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric('总评论', len(df))
-        c2.metric('保留', int((df['建议操作'] == '保留').sum()))
-        c3.metric('隐藏', int((df['建议操作'] == '隐藏').sum()))
-        c4.metric('待人工', int((df['人工审核'] == '待人工审核').sum()))
-
-        st.subheader('清理结果')
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        st.download_button(
-            '下载结果 CSV',
-            df.to_csv(index=False).encode('utf-8-sig'),
-            'cleaned_comments.csv',
-            'text/csv'
-        )
-    else:
-        st.warning('没有可处理的评论。')
-else:
-    st.info('点击「一键清理」开始演示。')
-
-st.divider()
-st.subheader('人工审核区域')
-st.write('这里仅展示“待人工审核”的评论。你可以手动输入关键词并加入到三类筛选列表里，然后点击“更新关键词”。')
-
-pending = st.session_state.review_items
-if pending:
-    add_white = []
-    add_spam = []
-    add_neg = []
-    for idx, item in enumerate(pending):
-        with st.expander(f"评论 {item['序号']} · {item['评论'][:30]}"):
-            col1, col2 = st.columns([1, 1])
-            chosen = col1.radio('处理结果', ['保留', '隐藏'], key=f"review_action_{item['序号']}_{idx}")
-            reason = col2.selectbox('理由', ['内容有价值', '重复/灌水', '与主题无关', '广告/引流', '情绪攻击', '其他'], key=f"review_reason_{item['序号']}_{idx}")
-            manual_kw = st.text_input('手动提取关键词（逗号分隔）', value='', key=f"manual_kw_{item['序号']}_{idx}")
-            b1, b2, b3 = st.columns(3)
-            if b1.button('加入白名单', key=f"add_white_{item['序号']}_{idx}"):
-                add_white.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
-            if b2.button('加入广告词', key=f"add_spam_{item['序号']}_{idx}"):
-                add_spam.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
-            if b3.button('加入负能量词', key=f"add_neg_{item['序号']}_{idx}"):
-                add_neg.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
-            if st.button('提交审核结果', key=f"submit_{item['序号']}_{idx}"):
-                st.success(f"已提交：{chosen} · {reason}")
-    if st.button('更新关键词'):
-        st.session_state.whitelist = list(dict.fromkeys(st.session_state.whitelist + add_white))
-        st.session_state.spam_list = list(dict.fromkeys(st.session_state.spam_list + add_spam))
-        st.session_state.neg_list = list(dict.fromkeys(st.session_state.neg_list + add_neg))
-        st.rerun()
-else:
-    st.info('当前没有待人工审核的评论。先点击上方“一键清理”生成结果。')
+st.session_state.white_text = st.sidebar.text_input('白名单关键词（逗号分隔）', value=st.session_state.white_text, key='white_input')
+st.session_state.spam_text = st.sidebar.text_input('广告关键词（逗号分隔）', value=st.session_state.spam_text, key='spam_input')
+st.session_state.neg_text = st.sidebar.text_input('负能量关键词（逗号分隔）', value=st.session_state.neg_text, key='neg_input')
