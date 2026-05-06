@@ -34,6 +34,8 @@ if 'clean_records' not in st.session_state:
     st.session_state.clean_records = []
 if 'confirm_save' not in st.session_state:
     st.session_state.confirm_save = False
+if 'saved_batches' not in st.session_state:
+    st.session_state.saved_batches = []
 
 sample_comments = [
     '太好了，学到了，感谢分享！',
@@ -139,6 +141,26 @@ def current_final_df():
         return pd.DataFrame()
     return st.session_state.cleaned_df.copy()
 
+def summarize_batch(df):
+    total = len(df)
+    keep = int((df['建议操作'] == '保留').sum()) if '建议操作' in df.columns else 0
+    hide = int((df['建议操作'] == '隐藏').sum()) if '建议操作' in df.columns else 0
+    review = int((df['人工审核'] == '待人工审核').sum()) if '人工审核' in df.columns else 0
+    reviewed = int((df['人工审核'] == '已审核').sum()) if '人工审核' in df.columns else 0
+    return {'总评论': total, '保留': keep, '隐藏': hide, '待人工': review, '已审核': reviewed}
+
+def save_current_batch(df):
+    summary = summarize_batch(df)
+    batch_id = st.session_state.clean_run_id
+    snapshot = {
+        '批次': batch_id,
+        'summary': summary,
+        'data': df.fillna('').to_dict('records')
+    }
+    existing = [b for b in st.session_state.saved_batches if b['批次'] != batch_id]
+    existing.append(snapshot)
+    st.session_state.saved_batches = sorted(existing, key=lambda x: x['批次'])
+
 if st.session_state.page == '首页':
     c1, c2, c3, c4 = st.columns(4)
     c1.metric('可识别类型', '4+1')
@@ -156,13 +178,13 @@ if st.session_state.page == '首页':
             st.info('支持最短字数阈值调节')
         with col_b:
             st.success('支持人工审核结果回写')
-            st.info('支持清理记录存档')
+            st.info('支持按批次保存清理记录')
     with right:
         st.markdown('### 功能概览')
         st.write('• 关键词筛选：维护白名单、广告词、负能量词。')
         st.write('• 人工审核：逐条处理待审评论，并把结果回写。')
         st.write('• 最终结果：确认保存为清理记录。')
-        st.write('• 清理记录：保存确认后的历史结果。')
+        st.write('• 清理记录：按批次保存历史结果。')
         st.markdown('### 演示样例')
         for s in sample_comments[:5]:
             st.code(s, language='text')
@@ -256,29 +278,38 @@ elif st.session_state.page == '最终结果':
         c5.metric('已审核', int((df['人工审核'] == '已审核').sum()) if '人工审核' in df.columns else 0)
         st.checkbox('确认保存到清理记录', key='confirm_save')
         if st.session_state.confirm_save:
-            save_cols = ['原始评论', '分类', '建议操作', '理由']
-            save_df = df.copy()
-            for col in save_cols:
-                if col not in save_df.columns:
-                    save_df[col] = ''
-            st.session_state.clean_records = save_df[save_cols].fillna('').to_dict('records')
+            save_current_batch(df)
             st.success('已保存到清理记录区块。')
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        st.download_button('下载结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
+        show_cols = [c for c in ['序号', '原始评论', '分类', '建议操作', '理由', '人工审核', '人工审核结果', '人工审核理由'] if c in df.columns]
+        st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
+        st.download_button('下载结果 CSV', df[show_cols].to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
     else:
         st.info('还没有清理结果，先去“关键词筛选”页点击“开始清理”。')
 
 else:
     st.header('清理记录')
-    if st.session_state.clean_records:
-        st.write('以下为已保存的清理记录。')
-        for idx, rec in enumerate(st.session_state.clean_records):
-            st.markdown(f"{idx+1}. {rec.get('原始评论', '')} → {rec.get('分类', '')} · {rec.get('建议操作', '')} · {rec.get('理由', '')}")
-        options = [f"记录 {i+1}" for i in range(len(st.session_state.clean_records))]
-        selected = st.selectbox('查看保存的记录列表', options)
-        if selected:
-            i = options.index(selected)
-            rec = st.session_state.clean_records[i]
-            st.code(f"{rec.get('原始评论', '')} → {rec.get('分类', '')} · {rec.get('建议操作', '')} · {rec.get('理由', '')}", language='text')
+    if st.session_state.saved_batches:
+        st.write('以下为按批次保存的清理记录。左侧选择批次，展开后查看该批次最终结果。')
+        batch_labels = [f"第 {b['批次']} 批 · 保留 {b['summary']['保留']} · 隐藏 {b['summary']['隐藏']}" for b in st.session_state.saved_batches]
+        selected_label = st.selectbox('记录列表', batch_labels)
+        idx = batch_labels.index(selected_label)
+        batch = st.session_state.saved_batches[idx]
+        s = batch['summary']
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric('总评论', s['总评论'])
+        c2.metric('保留', s['保留'])
+        c3.metric('隐藏', s['隐藏'])
+        c4.metric('待人工', s['待人工'])
+        c5.metric('已审核', s['已审核'])
+        with st.expander(f"展开查看第 {batch['批次']} 批最终结果", expanded=False):
+            view_df = pd.DataFrame(batch['data'])
+            show_cols = [c for c in ['序号', '原始评论', '分类', '建议操作', '理由', '人工审核', '人工审核结果', '人工审核理由'] if c in view_df.columns]
+            st.dataframe(view_df[show_cols], use_container_width=True, hide_index=True)
+            st.download_button(
+                f"下载第 {batch['批次']} 批 CSV",
+                view_df[show_cols].to_csv(index=False).encode('utf-8-sig'),
+                f"batch_{batch['批次']}.csv",
+                'text/csv'
+            )
     else:
         st.info('当前还没有保存的清理记录。去“最终结果”页勾选确认保存。')
