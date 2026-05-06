@@ -163,7 +163,7 @@ def save_current_batch(df):
 
 if st.session_state.page == '首页':
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric('可识别类型', '4+1')
+    c1.metric('可识别类型', '3+1')
     c2.metric('关键词组', f"{len(white)} / {len(spam)} / {len(neg)}")
     c3.metric('最短字数', st.session_state.min_keep_len)
     c4.metric('当前批次', st.session_state.clean_run_id)
