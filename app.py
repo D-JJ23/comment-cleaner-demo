@@ -55,7 +55,7 @@ st.sidebar.title('菜单')
 st.sidebar.button('首页', key='nav_home', use_container_width=True, on_click=set_page, args=('首页',))
 st.sidebar.button('关键词筛选', key='nav_keywords', use_container_width=True, on_click=set_page, args=('关键词筛选',))
 st.sidebar.button('人工审核', key='nav_review', use_container_width=True, on_click=set_page, args=('人工审核',))
-st.sidebar.button('初筛结果', key='nav_result', use_container_width=True, on_click=set_page, args=('初筛结果',))
+st.sidebar.button('最终结果', key='nav_result', use_container_width=True, on_click=set_page, args=('最终结果',))
 st.sidebar.button('清理记录', key='nav_records', use_container_width=True, on_click=set_page, args=('清理记录',))
 
 st.title('闲语清屏')
@@ -93,11 +93,6 @@ def classify(comment: str):
         return '广告引流', '疑似号码'
     return '待人工', '需人工复核'
 
-def make_display_row(comment: str, label: str):
-    if label == '优质保留':
-        return f"{comment} → **{comment}**"
-    return f"{comment} → ~~{comment}~~"
-
 def run_cleaning():
     rows = []
     for i, line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
@@ -107,7 +102,6 @@ def run_cleaning():
         rows.append({
             '序号': i,
             '原始评论': line,
-            '显示记录': make_display_row(line, label),
             '分类': label,
             '建议操作': action,
             '理由': reason,
@@ -129,21 +123,21 @@ def run_cleaning():
     st.session_state.pending_add_neg = []
     st.session_state.confirm_save = False
 
+def apply_review(seq, action, reason):
+    if st.session_state.cleaned_df.empty:
+        return
+    mask = st.session_state.cleaned_df['序号'] == seq
+    if mask.any():
+        st.session_state.cleaned_df.loc[mask, '人工审核结果'] = action
+        st.session_state.cleaned_df.loc[mask, '人工审核理由'] = reason
+        st.session_state.cleaned_df.loc[mask, '人工审核'] = '已审核'
+        st.session_state.cleaned_df.loc[mask, '建议操作'] = action
+        st.session_state.review_decisions[seq] = {'action': action, 'reason': reason}
+
 def current_final_df():
     if st.session_state.cleaned_df.empty:
         return pd.DataFrame()
-    df = st.session_state.cleaned_df.copy()
-    if st.session_state.review_decisions:
-        for seq, info in st.session_state.review_decisions.items():
-            mask = df['序号'] == seq
-            if mask.any():
-                df.loc[mask, '人工审核结果'] = info['action']
-                df.loc[mask, '人工审核理由'] = info['reason']
-                df.loc[mask, '人工审核'] = '已审核'
-                df.loc[mask, '建议操作'] = info['action']
-                original = df.loc[mask, '原始评论'].iloc[0]
-                df.loc[mask, '显示记录'] = f"{original} → {'**' + original + '**' if info['action'] == '保留' else '~~' + original + '~~'}"
-    return df
+    return st.session_state.cleaned_df.copy()
 
 if st.session_state.page == '首页':
     c1, c2, c3, c4 = st.columns(4)
@@ -167,7 +161,7 @@ if st.session_state.page == '首页':
         st.markdown('### 功能概览')
         st.write('• 关键词筛选：维护白名单、广告词、负能量词。')
         st.write('• 人工审核：逐条处理待审评论，并把结果回写。')
-        st.write('• 初筛结果：先看当前批次，不直接当最终保存。')
+        st.write('• 最终结果：确认保存为清理记录。')
         st.write('• 清理记录：保存确认后的历史结果。')
         st.markdown('### 演示样例')
         for s in sample_comments[:5]:
@@ -193,7 +187,7 @@ elif st.session_state.page == '关键词筛选':
     st.info('这里可以调节“保留评论最短字数”，修改左侧关键词后点击“开始清理”即可进入初筛。')
     if st.button('开始清理', key=f'clean_keywords_{st.session_state.clean_run_id}', type='primary'):
         run_cleaning()
-        st.session_state.page = '初筛结果'
+        st.session_state.page = '最终结果'
         st.rerun()
 
 elif st.session_state.page == '人工审核':
@@ -230,7 +224,7 @@ elif st.session_state.page == '人工审核':
                     st.session_state.pending_add_neg.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
                     st.session_state.review_status[seq] = f'已加入负能量词候选：{manual_kw}'
                 if st.button('提交审核结果', key=submit_key):
-                    st.session_state.review_decisions[seq] = {'action': chosen, 'reason': reason}
+                    apply_review(seq, chosen, reason)
                     st.session_state.review_status[seq] = f'已提交：{chosen} · {reason}'
                 status = st.session_state.review_status.get(seq, '')
                 if status:
@@ -250,20 +244,6 @@ elif st.session_state.page == '人工审核':
     else:
         st.info('当前没有待人工审核的评论。先到“关键词筛选”页点击“开始清理”。')
 
-elif st.session_state.page == '初筛结果':
-    st.header('初筛结果')
-    df = st.session_state.cleaned_df.copy()
-    if not df.empty:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric('总评论', len(df))
-        c2.metric('保留', int((df['建议操作'] == '保留').sum()))
-        c3.metric('隐藏', int((df['建议操作'] == '隐藏').sum()))
-        c4.metric('待人工', int((df['人工审核'] == '待人工审核').sum()))
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        st.download_button('下载初筛结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'screened_comments.csv', 'text/csv')
-    else:
-        st.info('还没有初筛结果。')
-
 elif st.session_state.page == '最终结果':
     st.header('最终结果')
     df = current_final_df()
@@ -276,7 +256,7 @@ elif st.session_state.page == '最终结果':
         c5.metric('已审核', int((df['人工审核'] == '已审核').sum()) if '人工审核' in df.columns else 0)
         st.checkbox('确认保存到清理记录', key='confirm_save')
         if st.session_state.confirm_save:
-            save_cols = ['原始评论', '显示记录', '分类', '建议操作', '理由']
+            save_cols = ['原始评论', '分类', '建议操作', '理由']
             save_df = df.copy()
             for col in save_cols:
                 if col not in save_df.columns:
@@ -291,14 +271,14 @@ elif st.session_state.page == '最终结果':
 else:
     st.header('清理记录')
     if st.session_state.clean_records:
-        st.write('以下为已保存的清理记录。格式：左侧原始文本 → 右侧处理结果。')
+        st.write('以下为已保存的清理记录。')
         for idx, rec in enumerate(st.session_state.clean_records):
-            st.markdown(f"{idx+1}. {rec.get('原始评论', '')} → {rec.get('显示记录', '')}")
+            st.markdown(f"{idx+1}. {rec.get('原始评论', '')} → {rec.get('分类', '')} · {rec.get('建议操作', '')} · {rec.get('理由', '')}")
         options = [f"记录 {i+1}" for i in range(len(st.session_state.clean_records))]
         selected = st.selectbox('查看保存的记录列表', options)
         if selected:
             i = options.index(selected)
             rec = st.session_state.clean_records[i]
-            st.code(f"{rec.get('原始评论', '')} → {rec.get('显示记录', '')}", language='text')
+            st.code(f"{rec.get('原始评论', '')} → {rec.get('分类', '')} · {rec.get('建议操作', '')} · {rec.get('理由', '')}", language='text')
     else:
         st.info('当前还没有保存的清理记录。去“最终结果”页勾选确认保存。')
