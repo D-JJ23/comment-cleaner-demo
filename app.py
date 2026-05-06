@@ -175,4 +175,17 @@ else:
                 if mask.any():
                     df.loc[mask, '人工审核结果'] = info['action']
                     df.loc[mask, '人工审核理由'] = info['reason']
-                    if in
+                    if info['action'] == '保留':
+                        df.loc[mask, '建议操作'] = '保留'
+                    elif info['action'] == '隐藏':
+                        df.loc[mask, '建议操作'] = '隐藏'
+                    df.loc[mask, '人工审核'] = '已审核'
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric('总评论', len(df))
+        c2.metric('保留', int((df['建议操作'] == '保留').sum()))
+        c3.metric('隐藏', int((df['建议操作'] == '隐藏').sum()))
+        c4.metric('待人工', int((df['人工审核'] == '待人工审核').sum()))
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.download_button('下载结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
+    else:
+        st.info('还没有清理结果，先去“关键词筛选”页点击“开始清理”。')
