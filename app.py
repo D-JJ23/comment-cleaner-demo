@@ -26,6 +26,8 @@ if 'review_decisions' not in st.session_state:
     st.session_state.review_decisions = {}
 if 'review_status' not in st.session_state:
     st.session_state.review_status = {}
+if 'min_keep_len' not in st.session_state:
+    st.session_state.min_keep_len = 5
 
 sample_comments = [
     '太好了，学到了，感谢分享！',
@@ -57,6 +59,8 @@ st.sidebar.subheader('关键词筛选列表')
 white_text = st.sidebar.text_input('白名单关键词（逗号分隔）', value=','.join(st.session_state.whitelist), key='white_input')
 spam_text = st.sidebar.text_input('广告关键词（逗号分隔）', value=','.join(st.session_state.spam_list), key='spam_input')
 neg_text = st.sidebar.text_input('负能量关键词（逗号分隔）', value=','.join(st.session_state.neg_list), key='neg_input')
+keep_len = st.sidebar.slider('保留评论最短字数', 2, 20, st.session_state.min_keep_len, key='keep_len_slider')
+st.session_state.min_keep_len = keep_len
 
 white = [x.strip() for x in white_text.split(',') if x.strip()]
 spam = [x.strip() for x in spam_text.split(',') if x.strip()]
@@ -65,7 +69,6 @@ neg = [x.strip() for x in neg_text.split(',') if x.strip()]
 st.sidebar.caption(f'白名单：{len(white)} 条 · 广告词：{len(spam)} 条 · 负能量词：{len(neg)} 条')
 
 text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
-min_len = 5
 
 def classify(comment: str):
     t = comment.strip()
@@ -77,7 +80,7 @@ def classify(comment: str):
         return '广告引流', '命中广告词'
     if any(k in t for k in neg):
         return '杠精/负能量', '命中负面词'
-    if len(re.sub(r'\s+', '', t)) < min_len:
+    if len(re.sub(r'\s+', '', t)) < st.session_state.min_keep_len:
         return '无意义灌水', '过短'
     if re.fullmatch(r'[哈嘿哦啊嗯嘛~!！?.。，,。]+', t):
         return '无意义灌水', '纯情绪/口水'
@@ -110,7 +113,7 @@ if st.session_state.page == '关键词筛选':
     with col3:
         st.metric('负能量词', len(neg))
         st.write(neg)
-    st.info('在这里修改左侧关键词后，点击“开始清理”即可进入清理并生效。')
+    st.info('这里可以调节“保留评论最短字数”，修改左侧关键词后点击“开始清理”即可进入清理并生效。')
     if st.button('开始清理', key='clean_keywords', type='primary'):
         run_cleaning()
         st.session_state.page = '最终结果'
@@ -119,7 +122,7 @@ if st.session_state.page == '关键词筛选':
 elif st.session_state.page == '人工审核':
     st.header('人工审核')
     if st.session_state.review_items:
-        for idx, item in enumerate(st.session_state.review_items):
+        for item in st.session_state.review_items:
             seq = item['序号']
             with st.expander(f"评论 {seq} · {item['评论'][:30]}"):
                 c1, c2 = st.columns([1, 1])
