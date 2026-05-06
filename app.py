@@ -55,7 +55,7 @@ st.sidebar.title('菜单')
 st.sidebar.button('首页', key='nav_home', use_container_width=True, on_click=set_page, args=('首页',))
 st.sidebar.button('关键词筛选', key='nav_keywords', use_container_width=True, on_click=set_page, args=('关键词筛选',))
 st.sidebar.button('人工审核', key='nav_review', use_container_width=True, on_click=set_page, args=('人工审核',))
-st.sidebar.button('最终结果', key='nav_result', use_container_width=True, on_click=set_page, args=('最终结果',))
+st.sidebar.button('初筛结果', key='nav_result', use_container_width=True, on_click=set_page, args=('初筛结果',))
 st.sidebar.button('清理记录', key='nav_records', use_container_width=True, on_click=set_page, args=('清理记录',))
 
 st.title('闲语清屏')
@@ -100,27 +100,25 @@ def make_display_row(comment: str, label: str):
 
 def run_cleaning():
     rows = []
-    records = []
     for i, line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
         label, reason = classify(line)
         action = '保留' if label == '优质保留' else '隐藏'
         review_flag = '待人工审核' if label == '待人工' else '无需人工'
-        display_text = make_display_row(line, label)
-        row = {
+        rows.append({
             '序号': i,
             '原始评论': line,
-            '显示记录': display_text,
+            '显示记录': make_display_row(line, label),
             '分类': label,
             '建议操作': action,
             '理由': reason,
             '人工审核': review_flag
-        }
-        rows.append(row)
-        records.append(row.copy())
+        })
     st.session_state.cleaned_df = pd.DataFrame(rows)
-    st.session_state.clean_records = records
     if not st.session_state.cleaned_df.empty:
-        st.session_state.review_items = st.session_state.cleaned_df[st.session_state.cleaned_df['人工审核'] == '待人工审核'][['序号', '原始评论']].to_dict('records')
+        review_df = st.session_state.cleaned_df.loc[
+            st.session_state.cleaned_df['人工审核'] == '待人工审核', ['序号', '原始评论']
+        ].fillna('')
+        st.session_state.review_items = review_df.to_dict('records')
     else:
         st.session_state.review_items = []
     st.session_state.clean_run_id += 1
@@ -142,10 +140,7 @@ def current_final_df():
                 df.loc[mask, '人工审核结果'] = info['action']
                 df.loc[mask, '人工审核理由'] = info['reason']
                 df.loc[mask, '人工审核'] = '已审核'
-                if info['action'] == '保留':
-                    df.loc[mask, '建议操作'] = '保留'
-                elif info['action'] == '隐藏':
-                    df.loc[mask, '建议操作'] = '隐藏'
+                df.loc[mask, '建议操作'] = info['action']
                 original = df.loc[mask, '原始评论'].iloc[0]
                 df.loc[mask, '显示记录'] = f"{original} → {'**' + original + '**' if info['action'] == '保留' else '~~' + original + '~~'}"
     return df
@@ -171,8 +166,9 @@ if st.session_state.page == '首页':
     with right:
         st.markdown('### 功能概览')
         st.write('• 关键词筛选：维护白名单、广告词、负能量词。')
-        st.write('• 人工审核：逐条处理待审评论，并把结果写回。')
-        st.write('• 最终结果：确认保存为清理记录。')
+        st.write('• 人工审核：逐条处理待审评论，并把结果回写。')
+        st.write('• 初筛结果：先看当前批次，不直接当最终保存。')
+        st.write('• 清理记录：保存确认后的历史结果。')
         st.markdown('### 演示样例')
         for s in sample_comments[:5]:
             st.code(s, language='text')
@@ -205,7 +201,8 @@ elif st.session_state.page == '人工审核':
     st.caption(f'当前清理批次：{st.session_state.clean_run_id}')
     if st.session_state.review_items:
         for item in st.session_state.review_items:
-            seq = item['序号']
+            seq = item.get('序号', '')
+            comment_text = item.get('原始评论', '')
             decision_key = f'decision_{st.session_state.clean_run_id}_{seq}'
             reason_key = f'review_reason_{st.session_state.clean_run_id}_{seq}'
             kw_key = f'kw_{st.session_state.clean_run_id}_{seq}'
@@ -213,7 +210,7 @@ elif st.session_state.page == '人工审核':
             white_key = f'white_{st.session_state.clean_run_id}_{seq}'
             spam_key = f'spam_{st.session_state.clean_run_id}_{seq}'
             neg_key = f'neg_{st.session_state.clean_run_id}_{seq}'
-            with st.expander(f"评论 {seq} · {item['原始评论'][:30]}"):
+            with st.expander(f'评论 {seq} · {comment_text[:30]}'):
                 c1, c2 = st.columns([1, 1])
                 if decision_key not in st.session_state:
                     st.session_state[decision_key] = '保留'
