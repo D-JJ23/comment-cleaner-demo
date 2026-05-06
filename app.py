@@ -40,9 +40,9 @@ def set_page(name):
     st.session_state.page = name
 
 st.sidebar.title('菜单')
-st.sidebar.button('关键词筛选', use_container_width=True, on_click=set_page, args=('关键词筛选',))
-st.sidebar.button('人工审核', use_container_width=True, on_click=set_page, args=('人工审核',))
-st.sidebar.button('最终结果', use_container_width=True, on_click=set_page, args=('最终结果',))
+st.sidebar.button('关键词筛选', key='nav_keywords', use_container_width=True, on_click=set_page, args=('关键词筛选',))
+st.sidebar.button('人工审核', key='nav_review', use_container_width=True, on_click=set_page, args=('人工审核',))
+st.sidebar.button('最终结果', key='nav_result', use_container_width=True, on_click=set_page, args=('最终结果',))
 
 st.title('闲语清屏')
 st.caption('社交社区无关评论一键清理 Demo')
@@ -81,25 +81,18 @@ def classify(comment: str):
         return '广告引流', '疑似号码'
     return '待人工', '需人工复核'
 
-if st.button('一键清理', type='primary'):
+def run_cleaning():
     rows = []
     for i, line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
         label, reason = classify(line)
         action = '保留' if label == '优质保留' else '隐藏'
         review_flag = '待人工审核' if label == '待人工' else '无需人工'
-        rows.append({
-            '序号': i,
-            '评论': line,
-            '分类': label,
-            '建议操作': action,
-            '理由': reason,
-            '人工审核': review_flag
-        })
-
-    if rows:
-        df = pd.DataFrame(rows)
-        st.session_state.cleaned_df = df
-        st.session_state.review_items = df[df['人工审核'] == '待人工审核'][['序号', '评论']].to_dict('records')
+        rows.append({'序号': i, '评论': line, '分类': label, '建议操作': action, '理由': reason, '人工审核': review_flag})
+    st.session_state.cleaned_df = pd.DataFrame(rows)
+    if not st.session_state.cleaned_df.empty:
+        st.session_state.review_items = st.session_state.cleaned_df[st.session_state.cleaned_df['人工审核'] == '待人工审核'][['序号', '评论']].to_dict('records')
+    else:
+        st.session_state.review_items = []
 
 if st.session_state.page == '关键词筛选':
     st.header('关键词筛选')
@@ -113,8 +106,9 @@ if st.session_state.page == '关键词筛选':
     with col3:
         st.metric('负能量词', len(neg))
         st.write(neg)
-    st.info('在这里修改左侧关键词后，点击菜单切换或“一键清理”即可生效。')
-    if st.button('一键清理', type='primary'):
+    st.info('在这里修改左侧关键词后，点击下面按钮即可进入清理并生效。')
+    if st.button('开始清理', key='clean_keywords', type='primary'):
+        run_cleaning()
         st.session_state.page = '最终结果'
         st.rerun()
 
@@ -140,7 +134,7 @@ elif st.session_state.page == '人工审核':
                 if st.button('提交审核结果', key=f'submit_{item["序号"]}_{idx}'):
                     st.success(f'已提交：{chosen} · {reason}')
 
-        if st.button('更新关键词'):
+        if st.button('更新关键词', key='update_keywords'):
             st.session_state.whitelist = list(dict.fromkeys(st.session_state.whitelist + st.session_state.pending_add_white))
             st.session_state.spam_list = list(dict.fromkeys(st.session_state.spam_list + st.session_state.pending_add_spam))
             st.session_state.neg_list = list(dict.fromkeys(st.session_state.neg_list + st.session_state.pending_add_neg))
@@ -150,7 +144,7 @@ elif st.session_state.page == '人工审核':
             st.session_state.page = '关键词筛选'
             st.rerun()
     else:
-        st.info('当前没有待人工审核的评论。先到“关键词筛选”页点击“一键清理”。')
+        st.info('当前没有待人工审核的评论。先到“关键词筛选”页点击“开始清理”。')
 
 else:
     st.header('最终结果')
@@ -164,4 +158,4 @@ else:
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.download_button('下载结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
     else:
-        st.info('还没有清理结果，先去“关键词筛选”页点击“一键清理”。')
+        st.info('还没有清理结果，先去“关键词筛选”页点击“开始清理”。')
