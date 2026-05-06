@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title='闲语清屏 Demo', page_icon='🧹', layout='wide')
 
 if 'page' not in st.session_state:
-    st.session_state.page = '关键词筛选'
+    st.session_state.page = '首页'
 if 'review_items' not in st.session_state:
     st.session_state.review_items = []
 if 'whitelist' not in st.session_state:
@@ -46,13 +46,13 @@ def set_page(name):
     st.session_state.page = name
 
 st.sidebar.title('菜单')
+st.sidebar.button('首页', key='nav_home', use_container_width=True, on_click=set_page, args=('首页',))
 st.sidebar.button('关键词筛选', key='nav_keywords', use_container_width=True, on_click=set_page, args=('关键词筛选',))
 st.sidebar.button('人工审核', key='nav_review', use_container_width=True, on_click=set_page, args=('人工审核',))
 st.sidebar.button('最终结果', key='nav_result', use_container_width=True, on_click=set_page, args=('最终结果',))
 
 st.title('闲语清屏')
 st.caption('社交社区无关评论一键清理 Demo')
-st.write('这是一款轻量评论清理 Demo，可识别无意义灌水、无关闲聊、广告引流、负能量杠精评论，并支持白名单保留优质评论。')
 
 st.sidebar.divider()
 st.sidebar.subheader('关键词筛选列表')
@@ -65,8 +65,6 @@ st.session_state.min_keep_len = keep_len
 white = [x.strip() for x in white_text.split(',') if x.strip()]
 spam = [x.strip() for x in spam_text.split(',') if x.strip()]
 neg = [x.strip() for x in neg_text.split(',') if x.strip()]
-
-st.sidebar.caption(f'白名单：{len(white)} 条 · 广告词：{len(spam)} 条 · 负能量词：{len(neg)} 条')
 
 text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
 
@@ -101,7 +99,42 @@ def run_cleaning():
     else:
         st.session_state.review_items = []
 
-if st.session_state.page == '关键词筛选':
+if st.session_state.page == '首页':
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric('可识别类型', '4+1')
+    c2.metric('关键词组', f"{len(white)} / {len(spam)} / {len(neg)}")
+    c3.metric('最短字数', st.session_state.min_keep_len)
+    c4.metric('审核状态', '联动')
+
+    left, right = st.columns([1.15, 0.85], gap='large')
+    with left:
+        st.markdown('### 让评论清理先有个“门面”')
+        st.write('这是一款轻量评论清理 Demo，适合演示社交社区里常见的无意义灌水、无关闲聊、广告引流、负能量对喷与人工复核流程。')
+        st.write('你可以先把它当作一个首页：看清能力、看清规则、看清流程，再切换到左侧三个功能页完成真正的筛选、审核与输出。')
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.success('支持左侧关键词动态维护')
+            st.info('支持最短字数阈值调节')
+        with col_b:
+            st.success('支持人工审核结果回写')
+            st.info('支持最终结果导出 CSV')
+
+    with right:
+        st.markdown('### 功能概览')
+        st.write('• 关键词筛选：维护白名单、广告词、负能量词。')
+        st.write('• 人工审核：逐条处理待审评论，并把结果写回。')
+        st.write('• 最终结果：查看整表、统计和下载。')
+        st.markdown('### 演示样例')
+        for s in sample_comments[:5]:
+            st.code(s, language='text')
+
+    st.divider()
+    c5, c6, c7 = st.columns(3)
+    c5.metric('首页状态', '已启用')
+    c6.metric('示例评论', len(sample_comments))
+    c7.metric('页面入口', '左侧菜单')
+
+elif st.session_state.page == '关键词筛选':
     st.header('关键词筛选')
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -148,14 +181,12 @@ elif st.session_state.page == '人工审核':
                 if st.button('提交审核结果', key=f'submit_{seq}'):
                     st.session_state.review_decisions[seq] = {'action': chosen, 'reason': reason}
                     st.session_state.review_status[seq] = f'已提交：{chosen} · {reason}'
-
                 status = st.session_state.review_status.get(seq, '')
                 if status:
                     st.success(status)
                 if seq in st.session_state.review_decisions:
                     d = st.session_state.review_decisions[seq]
                     st.info(f"当前记录：{d['action']} · {d['reason']}")
-
         if st.button('更新关键词', key='update_keywords'):
             st.session_state.whitelist = list(dict.fromkeys(st.session_state.whitelist + st.session_state.pending_add_white))
             st.session_state.spam_list = list(dict.fromkeys(st.session_state.spam_list + st.session_state.pending_add_spam))
