@@ -28,6 +28,8 @@ if 'review_status' not in st.session_state:
     st.session_state.review_status = {}
 if 'min_keep_len' not in st.session_state:
     st.session_state.min_keep_len = 5
+if 'clean_run_id' not in st.session_state:
+    st.session_state.clean_run_id = 0
 
 sample_comments = [
     '太好了，学到了，感谢分享！',
@@ -98,6 +100,12 @@ def run_cleaning():
         st.session_state.review_items = st.session_state.cleaned_df[st.session_state.cleaned_df['人工审核'] == '待人工审核'][['序号', '评论']].to_dict('records')
     else:
         st.session_state.review_items = []
+    st.session_state.clean_run_id += 1
+    st.session_state.review_status = {}
+    st.session_state.review_decisions = {}
+    st.session_state.pending_add_white = []
+    st.session_state.pending_add_spam = []
+    st.session_state.pending_add_neg = []
 
 if st.session_state.page == '首页':
     c1, c2, c3, c4 = st.columns(4)
@@ -118,7 +126,6 @@ if st.session_state.page == '首页':
         with col_b:
             st.success('支持人工审核结果回写')
             st.info('支持最终结果导出 CSV')
-
     with right:
         st.markdown('### 功能概览')
         st.write('• 关键词筛选：维护白名单、广告词、负能量词。')
@@ -127,7 +134,6 @@ if st.session_state.page == '首页':
         st.markdown('### 演示样例')
         for s in sample_comments[:5]:
             st.code(s, language='text')
-
     st.divider()
     c5, c6, c7 = st.columns(3)
     c5.metric('首页状态', '已启用')
@@ -147,38 +153,44 @@ elif st.session_state.page == '关键词筛选':
         st.metric('负能量词', len(neg))
         st.write(neg)
     st.info('这里可以调节“保留评论最短字数”，修改左侧关键词后点击“开始清理”即可进入清理并生效。')
-    if st.button('开始清理', key='clean_keywords', type='primary'):
+    if st.button('开始清理', key=f'clean_keywords_{st.session_state.clean_run_id}', type='primary'):
         run_cleaning()
         st.session_state.page = '最终结果'
         st.rerun()
 
 elif st.session_state.page == '人工审核':
     st.header('人工审核')
+    st.caption(f'当前清理批次：{st.session_state.clean_run_id}')
     if st.session_state.review_items:
         for item in st.session_state.review_items:
             seq = item['序号']
+            decision_key = f'decision_{st.session_state.clean_run_id}_{seq}'
+            reason_key = f'review_reason_{st.session_state.clean_run_id}_{seq}'
+            kw_key = f'kw_{st.session_state.clean_run_id}_{seq}'
+            submit_key = f'submit_{st.session_state.clean_run_id}_{seq}'
+            white_key = f'white_{st.session_state.clean_run_id}_{seq}'
+            spam_key = f'spam_{st.session_state.clean_run_id}_{seq}'
+            neg_key = f'neg_{st.session_state.clean_run_id}_{seq}'
             with st.expander(f"评论 {seq} · {item['评论'][:30]}"):
                 c1, c2 = st.columns([1, 1])
-                decision_key = f'decision_{seq}'
-                reason_key = f'review_reason_{seq}'
                 if decision_key not in st.session_state:
                     st.session_state[decision_key] = '保留'
                 if reason_key not in st.session_state:
                     st.session_state[reason_key] = '内容有价值'
                 chosen = c1.radio('处理结果', ['保留', '隐藏'], key=decision_key)
                 reason = c2.selectbox('理由', ['内容有价值', '重复/灌水', '与主题无关', '广告/引流', '情绪攻击', '其他'], key=reason_key)
-                manual_kw = st.text_input('手动提取关键词（逗号分隔）', value='', key=f'kw_{seq}')
+                manual_kw = st.text_input('手动提取关键词（逗号分隔）', value='', key=kw_key)
                 b1, b2, b3 = st.columns(3)
-                if b1.button('加入白名单', key=f'white_{seq}'):
+                if b1.button('加入白名单', key=white_key):
                     st.session_state.pending_add_white.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
                     st.session_state.review_status[seq] = f'已加入白名单候选：{manual_kw}'
-                if b2.button('加入广告词', key=f'spam_{seq}'):
+                if b2.button('加入广告词', key=spam_key):
                     st.session_state.pending_add_spam.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
                     st.session_state.review_status[seq] = f'已加入广告词候选：{manual_kw}'
-                if b3.button('加入负能量词', key=f'neg_{seq}'):
+                if b3.button('加入负能量词', key=neg_key):
                     st.session_state.pending_add_neg.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
                     st.session_state.review_status[seq] = f'已加入负能量词候选：{manual_kw}'
-                if st.button('提交审核结果', key=f'submit_{seq}'):
+                if st.button('提交审核结果', key=submit_key):
                     st.session_state.review_decisions[seq] = {'action': chosen, 'reason': reason}
                     st.session_state.review_status[seq] = f'已提交：{chosen} · {reason}'
                 status = st.session_state.review_status.get(seq, '')
