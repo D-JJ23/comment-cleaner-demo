@@ -1,13 +1,15 @@
+from pathlib import Path
+out = Path('output')
+out.mkdir(exist_ok=True)
+app = r'''import re
 import streamlit as st
 import pandas as pd
-import re
 
-st.set_page_config(page_title='闲语清屏 Demo', layout='wide')
+st.set_page_config(page_title='闲语清屏 Demo', page_icon='🧹', layout='wide')
 
 st.title('闲语清屏')
 st.caption('社交社区无关评论一键清理 Demo')
-
-st.markdown("这是一款轻量评论清理 Demo，可识别无意义灌水、无关闲聊、广告引流、负能量杠精评论，并支持白名单保留优质评论。")
+st.write('这是一款轻量评论清理 Demo，可识别无意义灌水、无关闲聊、广告引流、负能量杠精评论，并支持白名单保留优质评论。')
 
 sample_comments = [
     '太好了，学到了，感谢分享！',
@@ -28,15 +30,16 @@ keep_white = st.sidebar.text_input('白名单关键词（逗号分隔）', '感�
 spam_kw = st.sidebar.text_input('广告关键词（逗号分隔）', '微信,加我,私信,链接,代理,互关,引流')
 neg_kw = st.sidebar.text_input('负能量关键词（逗号分隔）', '笑死,垃圾,滚,废物,骗,水')
 
-text_input = st.text_area('输入评论，支持每行一条', '
-'.join(sample_comments), height=220)
+text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
 
 white = [x.strip() for x in keep_white.split(',') if x.strip()]
 spam = [x.strip() for x in spam_kw.split(',') if x.strip()]
 neg = [x.strip() for x in neg_kw.split(',') if x.strip()]
 
-def classify(c):
-    t = c.strip()
+def classify(comment: str):
+    t = comment.strip()
+    if not t:
+        return '空白', 'gray', '空行'
     if any(k in t for k in white):
         return '优质保留', 'green', '命中白名单'
     if any(k in t for k in spam):
@@ -51,19 +54,32 @@ def classify(c):
         return '广告引流', 'red', '疑似号码'
     return '待人工', 'blue', '需人工复核'
 
-if st.button('一键清理'):
-    rows=[]
-    for i,line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
-        label,color,reason = classify(line)
+if st.button('一键清理', type='primary'):
+    rows = []
+    for i, line in enumerate([x for x in text_input.splitlines() if x.strip()], start=1):
+        label, color, reason = classify(line)
         action = '保留' if label == '优质保留' else '隐藏'
-        rows.append({'序号':i,'评论':line,'分类':label,'建议操作':action,'理由':reason})
-    df = pd.DataFrame(rows)
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric('总评论', len(df))
-    c2.metric('保留', int((df['建议操作']=='保留').sum()))
-    c3.metric('隐藏', int((df['建议操作']=='隐藏').sum()))
-    c4.metric('待人工', int((df['分类']=='待人工').sum()))
-    st.dataframe(df, use_container_width=True, hide_index=True)
-    st.download_button('下载结果 CSV', df.to_csv(index=False).encode('utf-8-sig'), 'cleaned_comments.csv', 'text/csv')
+        rows.append({'序号': i, '评论': line, '分类': label, '建议操作': action, '理由': reason})
+
+    if rows:
+        df = pd.DataFrame(rows)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric('总评论', len(df))
+        c2.metric('保留', int((df['建议操作'] == '保留').sum()))
+        c3.metric('隐藏', int((df['建议操作'] == '隐藏').sum()))
+        c4.metric('待人工', int((df['分类'] == '待人工').sum()))
+
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.download_button(
+            '下载结果 CSV',
+            df.to_csv(index=False).encode('utf-8-sig'),
+            'cleaned_comments.csv',
+            'text/csv'
+        )
+    else:
+        st.warning('没有可处理的评论。')
 else:
     st.info('点击「一键清理」开始演示。')
+'''
+(out / 'app.py').write_text(app, encoding='utf-8')
+print('saved', (out / 'app.py').exists())
