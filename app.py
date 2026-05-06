@@ -32,7 +32,6 @@ if 'neg_list' not in st.session_state:
 
 st.sidebar.header('规则设置')
 min_len = st.sidebar.slider('最短有效字数', 2, 20, 5)
-extract_len = st.sidebar.slider('手动提取字数', 4, 20, 8)
 text_input = st.text_area('输入评论，支持每行一条', '\n'.join(sample_comments), height=220)
 
 st.sidebar.subheader('关键词筛选列表')
@@ -74,8 +73,7 @@ if st.button('一键清理', type='primary'):
             '分类': label,
             '建议操作': action,
             '理由': reason,
-            '人工审核': review_flag,
-            '提取关键词': line[:extract_len]
+            '人工审核': review_flag
         })
 
     if rows:
@@ -103,31 +101,19 @@ else:
 
 st.divider()
 st.subheader('人工审核区域')
-st.write('这里仅展示“待人工审核”的评论。可以手动把评论内容中的关键词提取到三类筛选列表里，然后点击“更新关键词”。')
+st.write('这里仅展示“待人工审核”的评论。你可以手动输入关键词并加入到三类筛选列表里，然后点击“更新关键词”。')
 
-if st.session_state.review_items:
+pending = st.session_state.review_items
+if pending:
     add_white = []
     add_spam = []
     add_neg = []
-
-    for idx, item in enumerate(st.session_state.review_items):
+    for idx, item in enumerate(pending):
         with st.expander(f"评论 {item['序号']} · {item['评论'][:30]}"):
             col1, col2 = st.columns([1, 1])
-            chosen = col1.radio(
-                '处理结果',
-                ['保留', '隐藏'],
-                key=f"review_action_{item['序号']}_{idx}"
-            )
-            reason = col2.selectbox(
-                '理由',
-                ['内容有价值', '重复/灌水', '与主题无关', '广告/引流', '情绪攻击', '其他'],
-                key=f"review_reason_{item['序号']}_{idx}"
-            )
-            manual_kw = st.text_input(
-                '手动提取关键词（逗号分隔）',
-                value=item['评论'][:extract_len],
-                key=f"manual_kw_{item['序号']}_{idx}"
-            )
+            chosen = col1.radio('处理结果', ['保留', '隐藏'], key=f"review_action_{item['序号']}_{idx}")
+            reason = col2.selectbox('理由', ['内容有价值', '重复/灌水', '与主题无关', '广告/引流', '情绪攻击', '其他'], key=f"review_reason_{item['序号']}_{idx}")
+            manual_kw = st.text_input('手动提取关键词（逗号分隔）', value='', key=f"manual_kw_{item['序号']}_{idx}")
             b1, b2, b3 = st.columns(3)
             if b1.button('加入白名单', key=f"add_white_{item['序号']}_{idx}"):
                 add_white.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
@@ -137,11 +123,10 @@ if st.session_state.review_items:
                 add_neg.extend([x.strip() for x in manual_kw.split(',') if x.strip()])
             if st.button('提交审核结果', key=f"submit_{item['序号']}_{idx}"):
                 st.success(f"已提交：{chosen} · {reason}")
-
     if st.button('更新关键词'):
         st.session_state.whitelist = list(dict.fromkeys(st.session_state.whitelist + add_white))
         st.session_state.spam_list = list(dict.fromkeys(st.session_state.spam_list + add_spam))
         st.session_state.neg_list = list(dict.fromkeys(st.session_state.neg_list + add_neg))
-        st.success('关键词已更新到筛选列表，请重新点击一键清理生效。')
+        st.rerun()
 else:
     st.info('当前没有待人工审核的评论。先点击上方“一键清理”生成结果。')
