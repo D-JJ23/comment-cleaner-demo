@@ -161,9 +161,13 @@ def save_current_batch(df):
     existing.append(snapshot)
     st.session_state.saved_batches = sorted(existing, key=lambda x: x['批次'])
 
+def delete_batch(batch_id):
+    st.session_state.saved_batches = [b for b in st.session_state.saved_batches if b['批次'] != batch_id]
+    st.rerun()
+
 if st.session_state.page == '首页':
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric('可识别类型', '3+1')
+    c1.metric('可识别类型', '4+1')
     c2.metric('关键词组', f"{len(white)} / {len(spam)} / {len(neg)}")
     c3.metric('最短字数', st.session_state.min_keep_len)
     c4.metric('当前批次', st.session_state.clean_run_id)
@@ -301,15 +305,20 @@ else:
         c3.metric('隐藏', s['隐藏'])
         c4.metric('待人工', s['待人工'])
         c5.metric('已审核', s['已审核'])
-        with st.expander(f"展开查看第 {batch['批次']} 批最终结果", expanded=False):
-            view_df = pd.DataFrame(batch['data'])
-            show_cols = [c for c in ['序号', '原始评论', '分类', '建议操作', '理由', '人工审核', '人工审核结果', '人工审核理由'] if c in view_df.columns]
-            st.dataframe(view_df[show_cols], use_container_width=True, hide_index=True)
-            st.download_button(
-                f"下载第 {batch['批次']} 批 CSV",
-                view_df[show_cols].to_csv(index=False).encode('utf-8-sig'),
-                f"batch_{batch['批次']}.csv",
-                'text/csv'
-            )
+        del_col, view_col = st.columns([1, 4])
+        with del_col:
+            if st.button('删除此批次', key=f"del_batch_{batch['批次']}", type='secondary'):
+                delete_batch(batch['批次'])
+        with view_col:
+            with st.expander(f"展开查看第 {batch['批次']} 批最终结果", expanded=False):
+                view_df = pd.DataFrame(batch['data'])
+                show_cols = [c for c in ['序号', '原始评论', '分类', '建议操作', '理由', '人工审核', '人工审核结果', '人工审核理由'] if c in view_df.columns]
+                st.dataframe(view_df[show_cols], use_container_width=True, hide_index=True)
+                st.download_button(
+                    f"下载第 {batch['批次']} 批 CSV",
+                    view_df[show_cols].to_csv(index=False).encode('utf-8-sig'),
+                    f"batch_{batch['批次']}.csv",
+                    'text/csv'
+                )
     else:
         st.info('当前还没有保存的清理记录。去“最终结果”页勾选确认保存。')
