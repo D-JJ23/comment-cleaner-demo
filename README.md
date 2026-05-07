@@ -1,3 +1,40 @@
-*闲语清屏 Demo
-**安装依赖：pip install -r requirements.txt
-**启动应用：streamlit run app.py
+# 闲语清屏 · Streamlit
+
+一个用于评论清理、人工审核、智能洞察、周报和自动告警的 Streamlit Demo。
+
+## 功能
+
+- 关键词筛选。
+- 评论自动分类。
+- 人工审核。
+- 清理记录保存与删除。
+- 智能洞察：趋势、分类分布、关键词热度、重复聚类、用户画像、治理报告。
+- 周报中心。
+- 自动告警。
+
+## 运行方式
+
+1. 安装依赖。
+
+```bash
+pip install -r requirements.txt
+```
+
+2. 启动应用。
+
+```bash
+streamlit run app.py
+```
+
+## 文件说明
+
+- `app.py`：主程序。
+- `requirements.txt`：依赖列表。
+- `README.md`：项目说明。
+
+## 使用建议
+
+- 先在左侧编辑关键词。
+- 再到“关键词筛选”页点击“开始清理”。
+- 在“人工审核”页处理待审评论。
+- 去“智能洞察”“周报中心”“自动告警”查看结果。
