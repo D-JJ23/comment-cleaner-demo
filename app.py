@@ -1,9 +1,7 @@
 import re
-import math
 from collections import Counter, defaultdict
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 
 st.set_page_config(page_title='闲语清屏 Demo', page_icon='🧹', layout='wide')
 
@@ -54,6 +52,7 @@ spam_text = st.sidebar.text_input('广告关键词（逗号分隔）', value=','
 neg_text = st.sidebar.text_input('负能量关键词（逗号分隔）', value=','.join(st.session_state.neg_list), key='neg_input')
 st.session_state.min_keep_len = st.sidebar.slider('保留评论最短字数', 2, 20, st.session_state.min_keep_len, key='keep_len_slider')
 st.session_state.alert_threshold = st.sidebar.slider('自动告警阈值', 0, 100, st.session_state.alert_threshold, key='alert_threshold_slider')
+
 white = [x.strip() for x in white_text.split(',') if x.strip()]
 spam = [x.strip() for x in spam_text.split(',') if x.strip()]
 neg = [x.strip() for x in neg_text.split(',') if x.strip()]
@@ -379,7 +378,11 @@ elif st.session_state.page == '清理记录':
                 st.session_state.delete_confirm_checked = False
             if st.session_state.delete_target_batch == batch['批次']:
                 st.warning(f"确认删除第 {batch['批次']} 批吗？")
-                st.session_state.delete_confirm_checked = st.checkbox(f'我确认要删除第 {batch["批次"]} 批', key=f'confirm_del_{batch["批次"]}', value=st.session_state.delete_confirm_checked)
+                st.session_state.delete_confirm_checked = st.checkbox(
+                    f'我确认要删除第 {batch["批次"]} 批',
+                    key=f'confirm_del_{batch["批次"]}',
+                    value=st.session_state.delete_confirm_checked
+                )
                 cdel1, cdel2 = st.columns(2)
                 with cdel1:
                     if st.button('确认删除', key=f'confirm_delete_{batch["批次"]}', type='primary'):
@@ -397,7 +400,12 @@ elif st.session_state.page == '清理记录':
                 view_df = pd.DataFrame(batch['data'])
                 show_cols = [c for c in ['序号', '原始评论', '用户ID', '批次时间', '分类', '建议操作', '理由', '置信度', '人工审核', '人工审核结果', '人工审核理由'] if c in view_df.columns]
                 st.dataframe(view_df[show_cols], use_container_width=True, hide_index=True)
-                st.download_button(f"下载第 {batch['批次']} 批 CSV", view_df[show_cols].to_csv(index=False).encode('utf-8-sig'), f"batch_{batch['批次']}.csv", 'text/csv')
+                st.download_button(
+                    f"下载第 {batch['批次']} 批 CSV",
+                    view_df[show_cols].to_csv(index=False).encode('utf-8-sig'),
+                    f"batch_{batch['批次']}.csv",
+                    'text/csv'
+                )
     else:
         st.info('当前还没有保存的清理记录。')
 
@@ -417,14 +425,12 @@ elif st.session_state.page == '智能洞察':
         st.markdown('### 1. 批次趋势')
         trend_df = trend_by_batch()
         if not trend_df.empty:
-            fig1 = px.line(trend_df, x='批次', y='健康度', markers=True, title='批次健康度趋势')
-            st.plotly_chart(fig1, use_container_width=True)
+            st.line_chart(trend_df.set_index('批次')[['健康度', '总评论', '保留', '隐藏', '待人工']])
             st.dataframe(trend_df, use_container_width=True, hide_index=True)
 
         st.markdown('### 2. 分类分布')
         class_dist = df.groupby('分类').size().reset_index(name='数量')
-        fig2 = px.bar(class_dist, x='分类', y='数量', color='分类', title='分类分布')
-        st.plotly_chart(fig2, use_container_width=True)
+        st.bar_chart(class_dist.set_index('分类')['数量'])
 
         st.markdown('### 3. 关键词热度')
         counter = Counter()
@@ -434,8 +440,7 @@ elif st.session_state.page == '智能洞察':
                     counter[tok] += 1
         hot = pd.DataFrame(counter.most_common(12), columns=['关键词', '次数']) if counter else pd.DataFrame(columns=['关键词', '次数'])
         if not hot.empty:
-            fig3 = px.bar(hot, x='关键词', y='次数', title='关键词热度图')
-            st.plotly_chart(fig3, use_container_width=True)
+            st.bar_chart(hot.set_index('关键词')['次数'])
             st.dataframe(hot, use_container_width=True, hide_index=True)
 
         st.markdown('### 4. 自动发现新词')
@@ -465,8 +470,7 @@ elif st.session_state.page == '智能洞察':
         profiles = infer_profiles(df)
         if not profiles.empty:
             st.dataframe(profiles, use_container_width=True, hide_index=True)
-            fig4 = px.scatter(profiles, x='评论数', y='风险分', color='类型', size='评论数', hover_name='用户ID', title='用户风险画像')
-            st.plotly_chart(fig4, use_container_width=True)
+            st.scatter_chart(profiles.set_index('用户ID')[['评论数', '风险分']])
 
         st.markdown('### 7. 治理报告')
         report = {
