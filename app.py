@@ -30,12 +30,14 @@ if 'min_keep_len' not in st.session_state:
     st.session_state.min_keep_len = 5
 if 'clean_run_id' not in st.session_state:
     st.session_state.clean_run_id = 0
-if 'clean_records' not in st.session_state:
-    st.session_state.clean_records = []
 if 'confirm_save' not in st.session_state:
     st.session_state.confirm_save = False
 if 'saved_batches' not in st.session_state:
     st.session_state.saved_batches = []
+if 'delete_target_batch' not in st.session_state:
+    st.session_state.delete_target_batch = None
+if 'delete_confirm_checked' not in st.session_state:
+    st.session_state.delete_confirm_checked = False
 
 sample_comments = [
     '太好了，学到了，感谢分享！',
@@ -124,6 +126,8 @@ def run_cleaning():
     st.session_state.pending_add_spam = []
     st.session_state.pending_add_neg = []
     st.session_state.confirm_save = False
+    st.session_state.delete_target_batch = None
+    st.session_state.delete_confirm_checked = False
 
 def apply_review(seq, action, reason):
     if st.session_state.cleaned_df.empty:
@@ -308,7 +312,29 @@ else:
         del_col, view_col = st.columns([1, 4])
         with del_col:
             if st.button('删除此批次', key=f"del_batch_{batch['批次']}", type='secondary'):
-                delete_batch(batch['批次'])
+                st.session_state.delete_target_batch = batch['批次']
+                st.session_state.delete_confirm_checked = False
+            if st.session_state.delete_target_batch == batch['批次']:
+                st.warning(f"确认删除第 {batch['批次']} 批吗？")
+                st.session_state.delete_confirm_checked = st.checkbox(
+                    f'我确认要删除第 {batch["批次"]} 批',
+                    key=f'confirm_del_{batch["批次"]}',
+                    value=st.session_state.delete_confirm_checked
+                )
+                cdel1, cdel2 = st.columns(2)
+                with cdel1:
+                    if st.button('确认删除', key=f'confirm_delete_{batch["批次"]}', type='primary'):
+                        if st.session_state.delete_confirm_checked:
+                            delete_batch(batch['批次'])
+                            st.session_state.delete_target_batch = None
+                            st.session_state.delete_confirm_checked = False
+                        else:
+                            st.error('请先勾选确认框。')
+                with cdel2:
+                    if st.button('取消', key=f'cancel_delete_{batch["批次"]}'):
+                        st.session_state.delete_target_batch = None
+                        st.session_state.delete_confirm_checked = False
+                        st.rerun()
         with view_col:
             with st.expander(f"展开查看第 {batch['批次']} 批最终结果", expanded=False):
                 view_df = pd.DataFrame(batch['data'])
